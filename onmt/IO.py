@@ -210,6 +210,8 @@ class ONMTDataset(torchtext.data.Dataset):
             if truncate:
                 lines = (line[:truncate] for line in lines)
             for line in lines:
+                if not line:
+                    continue
                 yield extract_features(line)
 
     def _construct_examples(self, lines, side):

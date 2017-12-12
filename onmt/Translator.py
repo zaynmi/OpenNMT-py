@@ -60,7 +60,6 @@ class Translator(object):
         return tokens
 
     def _runTarget(self, batch, data):
-
         _, src_lengths = batch.src
         src = onmt.IO.make_features(batch, 'src')
         tgt_in = onmt.IO.make_features(batch, 'tgt')[:-1]
@@ -84,7 +83,15 @@ class Translator(object):
             tgt = tgt.unsqueeze(1)
             scores = out.data.gather(1, tgt)
             scores.masked_fill_(tgt.eq(tgt_pad), 0)
-            goldScores += scores
+            # print(goldScores + scores)
+            # print('YO')
+            # print(tgt[0][0])
+            # print(tgt[0][0], scores[0][0])
+            goldScores = goldScores + scores
+            # goldScores += scores
+            # return
+            # goldScores += scores
+            # return
         return goldScores
 
     def translateBatch(self, batch, dataset):
@@ -133,6 +140,7 @@ class Translator(object):
             # Get all the pending current beam words and arrange for forward.
             inp = var(torch.stack([b.getCurrentState() for b in beam])
                       .t().contiguous().view(1, -1))
+            # print inp
 
             # Turn any copied words to UNKs
             # 0 is unk
@@ -153,7 +161,10 @@ class Translator(object):
             # (b) Compute a vector of batch*beam word scores.
             if not self.copy_attn:
                 out = self.model.generator.forward(decOut).data
+                # print out.max()
+                # print (out > -3.83).sum()
                 out = unbottle(out)
+                # print out.max()
                 # beam x tgt_vocab
             else:
                 out = self.model.generator.forward(decOut,
