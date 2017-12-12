@@ -5,7 +5,7 @@ port of [OpenNMT](https://github.com/OpenNMT/OpenNMT),
 an open-source (MIT) neural machine translation system. It is designed to be research friendly to try out new ideas in translation, summary, image-to-text, morphology, and many other domains.
 
 
-OpenNMT-py is run as a collaborative open-source project. It is currently maintained by [Sasha Rush](http://github.com/srush) (Cambridge, MA), [Ben Peters](http://github.com/bpopeters) (Saarbrücken), and [Jianyu Zhan](http://github.com/jianyuzhan) (Shenzhen). The original code was written by [Adam Lehrer](http://github.com/adamlehrer) (NYC). Codebase is nearing a stable 0.1 version. We currently recommend forking if you want stable code.
+OpenNMT-py is run as a collaborative open-source project. It is currently maintained by [Sasha Rush](http://github.com/srush) (Cambridge, MA), [Ben Peters](http://github.com/bpopeters) (Saarbrücken), and [Jianyu Zhan](http://github.com/jianyuzhan) (Shenzhen). The original code was written by [Adam Lerer](http://github.com/adamlerer) (NYC). Codebase is nearing a stable 0.1 version. We currently recommend forking if you want stable code.
 
 We love contributions. Please consult the Issues page for any [Contributions Welcome](https://github.com/OpenNMT/OpenNMT-py/issues?q=is%3Aissue+is%3Aopen+label%3A%22contributions+welcome%22) tagged post. 
 
@@ -73,9 +73,9 @@ Validation files are required and used to evaluate the convergence of the traini
 
 After running the preprocessing, the following files are generated:
 
-* `demo.src.dict`: Dictionary of source vocab to index mappings.
-* `demo.tgt.dict`: Dictionary of target vocab to index mappings.
-* `demo.train.pt`: serialized PyTorch file containing vocabulary, training and validation data
+* `demo.train.pt`: serialized PyTorch file containing training data
+* `demo.valid.pt`: serialized PyTorch file containing validation data
+* `demo.vocab.pt`: serialized PyTorch file containing vocabulary data
 
 
 Internally the system never touches the words themselves, but uses these indices.
@@ -127,7 +127,7 @@ An example of training for the WMT'16 Multimodal Translation task (http://www.st
 mkdir -p data/multi30k
 wget http://www.quest.dcs.shef.ac.uk/wmt16_files_mmt/training.tar.gz &&  tar -xf training.tar.gz -C data/multi30k && rm training.tar.gz
 wget http://www.quest.dcs.shef.ac.uk/wmt16_files_mmt/validation.tar.gz && tar -xf validation.tar.gz -C data/multi30k && rm validation.tar.gz
-wget https://staff.fnwi.uva.nl/d.elliott/wmt16/mmt16_task1_test.tgz && tar -xf mmt16_task1_test.tgz -C data/multi30k && rm mmt16_task1_test.tgz
+wget http://www.quest.dcs.shef.ac.uk/wmt17_files_mmt/mmt_task1_test2016.tar.gz && tar -xf mmt_task1_test2016.tar.gz -C data/multi30k && rm mmt_task1_test2016.tar.gz
 ```
 
 ### 1) Preprocess the data.
@@ -142,13 +142,13 @@ python preprocess.py -train_src data/multi30k/train.en.atok -train_tgt data/mult
 ### 2) Train the model.
 
 ```bash
-python train.py -data data/multi30k.atok.low.train.pt -save_model multi30k_model -gpuid 0
+python train.py -data data/multi30k.atok.low -save_model multi30k_model -gpuid 0
 ```
 
 ### 3) Translate sentences.
 
 ```bash
-python translate.py -gpu 0 -model multi30k_model_e13_*.pt -src data/multi30k/test.en.atok -tgt data/multi30k/test.de.atok -replace_unk -verbose -output multi30k.test.pred.atok
+python translate.py -gpu 0 -model multi30k_model_*_e13.pt -src data/multi30k/test.en.atok -tgt data/multi30k/test.de.atok -replace_unk -verbose -output multi30k.test.pred.atok
 ```
 
 ### 4) Evaluate.
@@ -156,6 +156,9 @@ python translate.py -gpu 0 -model multi30k_model_e13_*.pt -src data/multi30k/tes
 ```bash
 perl tools/multi-bleu.perl data/multi30k/test.de.atok < multi30k.test.pred.atok
 ```
+## Pretrained embeddings (e.g. GloVe)
+
+Go to tutorial: [How to use GloVe pre-trained embeddings in OpenNMT-py](http://forum.opennmt.net/t/how-to-use-glove-pre-trained-embeddings-in-opennmt-py/1011)
 
 ## Pretrained Models
 

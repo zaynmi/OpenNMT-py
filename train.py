@@ -1,6 +1,9 @@
+#!/usr/bin/env python
+
 from __future__ import division
 
 import os
+import sys
 import argparse
 import torch
 import torch.nn as nn
@@ -13,7 +16,9 @@ import onmt.modules
 from onmt.Utils import aeq, use_gpu
 import opts
 
-parser = argparse.ArgumentParser(description='train.py')
+parser = argparse.ArgumentParser(
+    description='train.py',
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
 # opts.py
 opts.add_md_help_argument(parser)
@@ -44,6 +49,10 @@ if opt.gpuid:
     if opt.seed > 0:
         torch.cuda.manual_seed(opt.seed)
 
+if len(opt.gpuid) > 1:
+    sys.stderr.write("Sorry, multigpu isn't supported yet, coming soon!\n")
+    sys.exit(1)
+
 
 # Set up the Crayon logging server.
 if opt.exp_host != "":
@@ -62,18 +71,24 @@ def report_func(epoch, batch, num_batches,
     """
     This is the user-defined batch-level traing progress
     report function.
+
     Args:
         epoch(int): current epoch count.
         batch(int): current batch count.
         num_batches(int): total number of batches.
         start_time(float): last report time.
         lr(float): current learning rate.
-        report_stats(Statistics): a Statistics instance.
+        report_stats(Statistics): old Statistics instance.
+    Returns:
+        report_stats(Statistics): updated Statistics instance.
     """
     if batch % opt.report_every == -1 % opt.report_every:
         report_stats.output(epoch, batch+1, num_batches, start_time)
         if opt.exp_host:
             report_stats.log("progress", experiment, lr)
+        report_stats = onmt.Statistics()
+
+    return report_stats
 
 
 def make_train_data_iter(train_data, opt):
@@ -185,7 +200,7 @@ def tally_parameters(model):
 
 
 def load_fields(train, valid, checkpoint):
-    fields = onmt.IO.ONMTDataset.load_fields(
+    fields = onmt.IO.load_fields(
                 torch.load(opt.data + '.vocab.pt'))
     fields = dict([(k, f) for (k, f) in fields.items()
                   if k in train.examples[0].__dict__])
@@ -194,7 +209,7 @@ def load_fields(train, valid, checkpoint):
 
     if opt.train_from:
         print('Loading vocab from checkpoint at %s.' % opt.train_from)
-        fields = onmt.IO.ONMTDataset.load_fields(checkpoint['vocab'])
+        fields = onmt.IO.load_fields(checkpoint['vocab'])
 
     print(' * vocabulary size. source = %d; target = %d' %
           (len(fields['src'].vocab), len(fields['tgt'].vocab)))
@@ -205,8 +220,8 @@ def load_fields(train, valid, checkpoint):
 def collect_features(train, fields):
     # TODO: account for target features.
     # Also, why does fields need to have the structure it does?
-    src_features = onmt.IO.ONMTDataset.collect_features(fields)
-    aeq(len(src_features), train.nfeatures)
+    src_features = onmt.IO.collect_features(fields)
+    aeq(len(src_features), train.n_src_feats)
 
     return src_features
 
@@ -216,7 +231,7 @@ def build_model(model_opt, opt, fields, checkpoint):
     model = onmt.ModelConstructor.make_base_model(model_opt, fields,
                                                   use_gpu(opt), checkpoint)
     if len(opt.gpuid) > 1:
-        print('Multi gpu training ', opt.gpuid)
+        print('Multi gpu training: ', opt.gpuid)
         model = nn.DataParallel(model, device_ids=opt.gpuid, dim=1)
     print(model)
 
@@ -235,6 +250,9 @@ def build_optim(model, checkpoint):
             opt.optim, opt.learning_rate, opt.max_grad_norm,
             lr_decay=opt.learning_rate_decay,
             start_decay_at=opt.start_decay_at,
+            beta1=opt.adam_beta1,
+            beta2=opt.adam_beta2,
+            adagrad_accum=opt.adagrad_accumulator_init,
             opt=opt
         )
 
@@ -270,7 +288,7 @@ def main():
     # Collect features.
     src_features = collect_features(train, fields)
     for j, feat in enumerate(src_features):
-        print(' * src feature %d size = %d' % (j, len(feat.vocab)))
+        print(' * src feature %d size = %d' % (j, len(fields[feat].vocab)))
 
     # Build model.
     model = build_model(model_opt, opt, fields, checkpoint)

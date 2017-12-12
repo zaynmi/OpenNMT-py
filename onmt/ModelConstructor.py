@@ -7,7 +7,6 @@ import torch.nn as nn
 import onmt
 import onmt.Models
 import onmt.modules
-from onmt.IO import ONMTDataset
 from onmt.Models import NMTModel, MeanEncoder, RNNEncoder, \
                         StdRNNDecoder, InputFeedRNNDecoder
 from onmt.modules import Embeddings, ImageEncoder, CopyGenerator, \
@@ -67,7 +66,7 @@ def make_encoder(opt, embeddings):
         return MeanEncoder(opt.enc_layers, embeddings)
     else:
         # "rnn" or "brnn"
-        return RNNEncoder(opt.rnn_type, opt.brnn, opt.dec_layers,
+        return RNNEncoder(opt.rnn_type, opt.brnn, opt.enc_layers,
                           opt.rnn_size, opt.dropout, embeddings)
 
 
@@ -124,7 +123,7 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
     # Make encoder.
     if model_opt.model_type == "text":
         src_dict = fields["src"].vocab
-        feature_dicts = ONMTDataset.collect_feature_dicts(fields)
+        feature_dicts = onmt.IO.collect_feature_dicts(fields, 'src')
         src_embeddings = make_embeddings(model_opt, src_dict,
                                          feature_dicts)
         encoder = make_encoder(model_opt, src_embeddings)
@@ -137,9 +136,14 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
     # Make decoder.
     tgt_dict = fields["tgt"].vocab
     # TODO: prepare for a future where tgt features are possible.
-    feature_dicts = []
+    feature_dicts = onmt.IO.collect_feature_dicts(fields, 'tgt')
     tgt_embeddings = make_embeddings(model_opt, tgt_dict,
                                      feature_dicts, for_encoder=False)
+
+    # Share the embedding matrix - preprocess with share_vocab required
+    if model_opt.share_embeddings:
+        tgt_embeddings.word_lut.weight = src_embeddings.word_lut.weight
+
     decoder = make_decoder(model_opt, tgt_embeddings)
 
     # Make NMTModel(= encoder + decoder).
@@ -163,15 +167,17 @@ def make_base_model(model_opt, fields, gpu, checkpoint=None):
         generator.load_state_dict(checkpoint['generator'])
     else:
         if model_opt.param_init != 0.0:
-            print('Intializing parameters.')
+            print('Intializing model parameters.')
             for p in model.parameters():
+                p.data.uniform_(-model_opt.param_init, model_opt.param_init)
+            for p in generator.parameters():
                 p.data.uniform_(-model_opt.param_init, model_opt.param_init)
         model.encoder.embeddings.load_pretrained_vectors(
                 model_opt.pre_word_vecs_enc, model_opt.fix_word_vecs_enc)
         model.decoder.embeddings.load_pretrained_vectors(
                 model_opt.pre_word_vecs_dec, model_opt.fix_word_vecs_dec)
 
-    # add the generator to the module (does this register the parameter?)
+    # Add generator to model (this registers it as parameter of model).
     model.generator = generator
 
     # Make the whole model leverage GPU if indicated to do so.

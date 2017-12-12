@@ -33,6 +33,9 @@ def model_opts(parser):
                         help='Use a sin to mark relative words positions.')
     parser.add_argument('-share_decoder_embeddings', action='store_true',
                         help='Share the word and out embeddings for decoder.')
+    parser.add_argument('-share_embeddings', action='store_true',
+                        help="""Share the word embeddings between encoder
+                         and decoder.""")
 
     # RNN Options
     parser.add_argument('-encoder_type', type=str, default='rnn',
@@ -67,7 +70,7 @@ def model_opts(parser):
     # parser.add_argument('-residual',   action="store_true",
     #                     help="Add residual connections between RNN layers.")
 
-    parser.add_argument('-brnn', action="store_true",
+    parser.add_argument('-brnn', action=DeprecateAction,
                         help="Deprecated, use `encoder_type`.")
     parser.add_argument('-brnn_merge', default='concat',
                         choices=['concat', 'sum'],
@@ -93,6 +96,38 @@ def model_opts(parser):
                         help='Train a coverage attention layer.')
     parser.add_argument('-lambda_coverage', type=float, default=1,
                         help='Lambda value for coverage.')
+
+
+def preprocess_opts(parser):
+    # Dictionary Options
+    parser.add_argument('-src_vocab_size', type=int, default=50000,
+                        help="Size of the source vocabulary")
+    parser.add_argument('-tgt_vocab_size', type=int, default=50000,
+                        help="Size of the target vocabulary")
+
+    parser.add_argument('-src_words_min_frequency', type=int, default=0)
+    parser.add_argument('-tgt_words_min_frequency', type=int, default=0)
+
+    # Truncation options
+    parser.add_argument('-src_seq_length', type=int, default=50,
+                        help="Maximum source sequence length")
+    parser.add_argument('-src_seq_length_trunc', type=int, default=0,
+                        help="Truncate source sequence length.")
+    parser.add_argument('-tgt_seq_length', type=int, default=50,
+                        help="Maximum target sequence length to keep.")
+    parser.add_argument('-tgt_seq_length_trunc', type=int, default=0,
+                        help="Truncate target sequence length.")
+
+    # Data processing options
+    parser.add_argument('-shuffle', type=int, default=1,
+                        help="Shuffle data")
+    parser.add_argument('-lower', action='store_true', help='lowercase data')
+
+    # Options most relevant to summarization
+    parser.add_argument('-dynamic_dict', action='store_true',
+                        help="Create dynamic dictionaries")
+    parser.add_argument('-share_vocab', action='store_true',
+                        help="Share source and target vocabulary")
 
 
 def train_opts(parser):
@@ -152,6 +187,11 @@ def train_opts(parser):
     parser.add_argument('-optim', default='sgd',
                         choices=['sgd', 'adagrad', 'adadelta', 'adam'],
                         help="""Optimization method.""")
+    parser.add_argument('-adagrad_accumulator_init', type=float, default=0,
+                        help="""Initializes the accumulator values in adagrad.
+                        Mirrors the initial_accumulator_value option
+                        in the tensorflow adagrad (use 0.1 for their default).
+                        """)
     parser.add_argument('-max_grad_norm', type=float, default=5,
                         help="""If the norm of the gradient vector exceeds this,
                         renormalize it to have the norm equal to
@@ -160,10 +200,27 @@ def train_opts(parser):
                         help="Dropout probability; applied in LSTM stacks.")
     parser.add_argument('-truncated_decoder', type=int, default=0,
                         help="""Truncated bptt.""")
+    parser.add_argument('-adam_beta1', type=float, default=0.9,
+                        help="""The beta1 parameter used by Adam.
+                        Almost without exception a value of 0.9 is used in
+                        the literature, seemingly giving good results,
+                        so we would discourage changing this value from
+                        the default without due consideration.""")
+    parser.add_argument('-adam_beta2', type=float, default=0.999,
+                        help="""The beta2 parameter used by Adam.
+                        Typically a value of 0.999 is recommended, as this is
+                        the value suggested by the original paper describing
+                        Adam, and is also the value adopted in other frameworks
+                        such as Tensorflow and Kerras, i.e. see:
+                        https://www.tensorflow.org/api_docs/python/tf/train/AdamOptimizer
+                        https://keras.io/optimizers/ .
+                        Whereas recently the paper "Attention is All You Need"
+                        suggested a value of 0.98 for beta2, this parameter may
+                        not work well for normal models / default
+                        baselines.""")
     # learning rate
     parser.add_argument('-learning_rate', type=float, default=1.0,
-                        help="""Starting learning rate. If adagrad/adadelta/adam
-                        is used, then this is the global learning rate.
+                        help="""Starting learning rate.
                         Recommended settings: sgd = 1, adagrad = 0.1,
                         adadelta = 1, adam = 0.001""")
     parser.add_argument('-learning_rate_decay', type=float, default=0.5,
@@ -190,36 +247,56 @@ def train_opts(parser):
                         help="Name of the experiment for logging.")
 
 
-def preprocess_opts(parser):
-    # Dictionary Options
-    parser.add_argument('-src_vocab_size', type=int, default=50000,
-                        help="Size of the source vocabulary")
-    parser.add_argument('-tgt_vocab_size', type=int, default=50000,
-                        help="Size of the target vocabulary")
-
-    parser.add_argument('-src_words_min_frequency', type=int, default=0)
-    parser.add_argument('-tgt_words_min_frequency', type=int, default=0)
-
-    # Truncation options
-    parser.add_argument('-src_seq_length', type=int, default=50,
-                        help="Maximum source sequence length")
-    parser.add_argument('-src_seq_length_trunc', type=int, default=0,
-                        help="Truncate source sequence length.")
-    parser.add_argument('-tgt_seq_length', type=int, default=50,
-                        help="Maximum target sequence length to keep.")
-    parser.add_argument('-tgt_seq_length_trunc', type=int, default=0,
-                        help="Truncate target sequence length.")
-
-    # Data processing options
-    parser.add_argument('-shuffle', type=int, default=1,
-                        help="Shuffle data")
-    parser.add_argument('-lower', action='store_true', help='lowercase data')
-
-    # Options most relevant to summarization
+def translate_opts(parser):
+    parser.add_argument('-model', required=True,
+                        help='Path to model .pt file')
+    parser.add_argument('-src',   required=True,
+                        help="""Source sequence to decode (one line per
+                        sequence)""")
+    parser.add_argument('-src_img_dir',   default="",
+                        help='Source image directory')
+    parser.add_argument('-tgt',
+                        help='True target sequence (optional)')
+    parser.add_argument('-output', default='pred.txt',
+                        help="""Path to output the predictions (each line will
+                        be the decoded sequence""")
+    parser.add_argument('-beam_size',  type=int, default=5,
+                        help='Beam size')
+    parser.add_argument('-batch_size', type=int, default=30,
+                        help='Batch size')
+    parser.add_argument('-max_sent_length', type=int, default=100,
+                        help='Maximum sentence length.')
+    parser.add_argument('-replace_unk', action="store_true",
+                        help="""Replace the generated UNK tokens with the
+                        source token that had highest attention weight. If
+                        phrase_table is provided, it will lookup the
+                        identified source token and give the corresponding
+                        target token. If it is not provided(or the identified
+                        source token does not exist in the table) then it
+                        will copy the source token""")
+    parser.add_argument('-verbose', action="store_true",
+                        help='Print scores and predictions for each sentence')
+    parser.add_argument('-attn_debug', action="store_true",
+                        help='Print best attn for each word')
+    parser.add_argument('-dump_beam', type=str, default="",
+                        help='File to dump beam information to.')
+    parser.add_argument('-n_best', type=int, default=1,
+                        help="""If verbose is set, will output the n_best
+                        decoded sentences""")
+    parser.add_argument('-gpu', type=int, default=-1,
+                        help="Device to run on")
+    # Options most relevant to summarization.
     parser.add_argument('-dynamic_dict', action='store_true',
                         help="Create dynamic dictionaries")
     parser.add_argument('-share_vocab', action='store_true',
                         help="Share source and target vocabulary")
+    # Alpha and Beta values for Google Length + Coverage penalty
+    # Described here: https://arxiv.org/pdf/1609.08144.pdf, Section 7
+    parser.add_argument('-alpha', type=float, default=0.,
+                        help="""Google NMT length penalty parameter
+                        (higher = longer generation)""")
+    parser.add_argument('-beta', type=float, default=-0.,
+                        help="""Coverage penalty parameter""")
 
 
 def add_md_help_argument(parser):
@@ -284,3 +361,14 @@ class MarkdownHelpAction(argparse.Action):
         parser.formatter_class = MarkdownHelpFormatter
         parser.print_help()
         parser.exit()
+
+
+class DeprecateAction(argparse.Action):
+    def __init__(self, option_strings, dest, help=None, **kwargs):
+        super(DeprecateAction, self).__init__(option_strings, dest, nargs=0,
+                                              help=help, **kwargs)
+
+    def __call__(self, parser, namespace, values, flag_name):
+        help = self.help if self.help is not None else ""
+        msg = "Flag '%s' is deprecated. %s" % (flag_name, help)
+        raise argparse.ArgumentTypeError(msg)
