@@ -108,7 +108,7 @@ def main():
                     tgt_sent = ' '.join(gold_sent)
                     os.write(1, bytes('GOLD %d: %s\n' %
                              (sent_number, tgt_sent), 'UTF-8'))
-                    print("GOLD SCORE: %.4f" % gold_score)
+                    # print("GOLD SCORE: %.4f" % gold_score)
 
                 if len(n_best_preds) > 1:
                     print('\nBEST HYP:')
