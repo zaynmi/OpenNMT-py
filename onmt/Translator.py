@@ -60,7 +60,7 @@ class Translator(object):
             for i in range(len(tokens)):
                 if tokens[i] == vocab.itos[onmt.IO.UNK]:
                     _, maxIndex = attn[i].max(0)
-                    tokens[i] = self.fields["src"].vocab.itos[src[maxIndex[0]]]
+                    tokens[i] = self.fields["src"].vocab.itos[src[maxIndex]]
         return tokens
 
     def _runTarget(self, batch, data):
@@ -110,7 +110,7 @@ class Translator(object):
                                         src, context, encStates)
 
         #  (1b) Initialize for the decoder.
-        def var(a): return Variable(a, volatile=True)
+        def var(a): return Variable(a)
 
         def rvar(a): return var(a.repeat(1, beam_size, 1))
 
